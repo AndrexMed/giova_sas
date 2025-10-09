@@ -1,7 +1,7 @@
 // lib/domain/usecases/update_client.dart
 
-import '../entities/client.dart';
-import '../repositories/client_repository.dart';
+import '../../entities/client.dart';
+import '../../repositories/client_repository.dart';
 
 /// Use Case: Se encarga de actualizar un cliente existente en el repositorio.
 class UpdateClient {

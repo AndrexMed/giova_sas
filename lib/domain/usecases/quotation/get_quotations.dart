@@ -1,5 +1,5 @@
-import '../entities/quotation.dart';
-import '../repositories/quotation_repository.dart';
+import '../../entities/quotation.dart';
+import '../../repositories/quotation_repository.dart';
 
 /// Use Case: Obtiene una lista de todas las cotizaciones.
 class GetQuotations {

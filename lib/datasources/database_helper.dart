@@ -48,7 +48,7 @@ class DatabaseHelper {
         name $textType,
         description $textTypeNullable,
         unit_price $realType,
-        unit $textType,
+        unit $textTypeNullable,
         category $textTypeNullable,
         created_at $textType
       )

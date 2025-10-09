@@ -1,4 +1,4 @@
-import '../entities/quotation_item.dart';
+import '../../entities/quotation_item.dart';
 
 /// Define la estructura para el resultado de un cálculo de cotización.
 class CalculationResult {

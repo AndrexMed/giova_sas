@@ -1,7 +1,7 @@
 // lib/domain/usecases/create_client.dart
 
-import '../entities/client.dart';
-import '../repositories/client_repository.dart';
+import '../../entities/client.dart';
+import '../../repositories/client_repository.dart';
 
 /// Use Case: Se encarga de crear un nuevo cliente en el repositorio.
 class CreateClient {

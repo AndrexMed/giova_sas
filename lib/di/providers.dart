@@ -1,23 +1,36 @@
 // lib/di/providers.dart
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:giova_sas/domain/usecases/quotation/update_quotation.dart';
 import 'package:uuid/uuid.dart';
 
 // --- Capa de Datos (Data Layer) ---
 import '../../datasources/database_helper.dart';
 import '../data/repositories/client_repository_impl.dart';
+import '../data/repositories/product_repository_impl.dart';
 import '../data/repositories/quotation_repository_impl.dart';
 
 // --- Capa de Dominio (Domain Layer) ---
 import '../domain/repositories/client_repository.dart';
 import '../domain/repositories/quotation_repository.dart';
-import '../domain/usecases/calculate_quotation_total.dart';
-import '../domain/usecases/create_client.dart';
-import '../domain/usecases/create_quotation.dart';
-import '../domain/usecases/get_clients.dart';
-import '../domain/usecases/get_quotations.dart';
-import '../domain/usecases/update_client.dart'; // ¡AÑADIDO!
-import '../domain/usecases/delete_client.dart'; // ¡AÑADIDO!
+import '../domain/repositories/product_repository.dart';
+
+// Use Cases de Clientes
+import '../domain/usecases/client/update_client.dart';
+import '../domain/usecases/client/delete_client.dart';
+import '../domain/usecases/client/get_clients.dart';
+import '../domain/usecases/client/create_client.dart';
+
+// Use Cases de Productos
+import '../domain/usecases/product/create_product.dart';
+import '../domain/usecases/product/delete_product.dart';
+import '../domain/usecases/product/get_all_products.dart';
+import '../domain/usecases/product/update_product.dart';
+
+// Use Cases de Cotizaciones
+import '../domain/usecases/quotation/calculate_quotation_total.dart';
+import '../domain/usecases/quotation/create_quotation.dart';
+import '../domain/usecases/quotation/get_quotations.dart';
+import '../domain/usecases/quotation/delete_quotation.dart';
 
 // ----------------------------------------------------
 // 1. Providers de Utilidades y Helper (Infrastructure)
@@ -45,6 +58,12 @@ final clientRepositoryProvider = Provider<ClientRepository>((ref) {
   return ClientRepositoryImpl(dbHelper);
 });
 
+/// Proveedor para el Repositorio de Productos (Contrato)
+final productRepositoryProvider = Provider<ProductRepository>((ref) {
+  final dbHelper = ref.watch(databaseHelperProvider);
+  return ProductRepositoryImpl(dbHelper);
+});
+
 /// Proveedor para el Repositorio de Cotizaciones (Contrato)
 final quotationRepositoryProvider = Provider<QuotationRepository>((ref) {
   // Se inyecta la dependencia del DatabaseHelper
@@ -70,7 +89,6 @@ final createClientUseCaseProvider = Provider<CreateClient>((ref) {
   return CreateClient(repository);
 });
 
-// ¡NUEVOS PROVIDERS AÑADIDOS!
 final updateClientUseCaseProvider = Provider<UpdateClient>((ref) {
   final repository = ref.watch(clientRepositoryProvider);
   return UpdateClient(repository);
@@ -79,6 +97,29 @@ final updateClientUseCaseProvider = Provider<UpdateClient>((ref) {
 final deleteClientUseCaseProvider = Provider<DeleteClient>((ref) {
   final repository = ref.watch(clientRepositoryProvider);
   return DeleteClient(repository);
+});
+// -------------------------------------
+
+// --- Use Cases de Productos (AÑADIDOS) ---
+
+final getAllProductsUseCaseProvider = Provider<GetAllProducts>((ref) {
+  final repository = ref.watch(productRepositoryProvider);
+  return GetAllProducts(repository);
+});
+
+final createProductUseCaseProvider = Provider<CreateProduct>((ref) {
+  final repository = ref.watch(productRepositoryProvider);
+  return CreateProduct(repository);
+});
+
+final updateProductUseCaseProvider = Provider<UpdateProduct>((ref) {
+  final repository = ref.watch(productRepositoryProvider);
+  return UpdateProduct(repository);
+});
+
+final deleteProductUseCaseProvider = Provider<DeleteProduct>((ref) {
+  final repository = ref.watch(productRepositoryProvider);
+  return DeleteProduct(repository);
 });
 // -------------------------------------
 
@@ -109,3 +150,14 @@ final createQuotationUseCaseProvider = Provider<CreateQuotation>((ref) {
     uuid: uuid,
   );
 });
+
+final deleteQuotationUseCaseProvider = Provider<DeleteQuotation>((ref) {
+  final repository = ref.watch(quotationRepositoryProvider);
+  return DeleteQuotation(repository);
+});
+
+final updateQuotationUseCaseProvider = Provider<UpdateQuotation>((ref) {
+  final repository = ref.watch(quotationRepositoryProvider);
+  return UpdateQuotation(repository);
+});
+// -------------------------------------

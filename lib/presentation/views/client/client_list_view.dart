@@ -11,9 +11,10 @@ class ClientListView extends ConsumerWidget {
   const ClientListView({super.key});
 
   void _showAddClientForm(BuildContext context) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) => const ClientFormModal(),
     );
   }

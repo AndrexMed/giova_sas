@@ -6,7 +6,7 @@ import '../entities/product.dart';
 /// Define las operaciones CRUD que deben ser implementadas en la Capa de Datos.
 abstract class ProductRepository {
   /// Obtiene todos los productos.
-  Future<List<Product>> getProducts();
+  Future<List<Product>> getAllProducts();
 
   /// Obtiene un producto por su ID.
   Future<Product?> getProductById(String id);

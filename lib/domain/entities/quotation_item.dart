@@ -1,20 +1,18 @@
 // lib/domain/entities/quotation_item.dart
 
-/// Clase de Entidad pura que representa un Ítem dentro de una Cotización.
-class QuotationItem {
+import 'package:equatable/equatable.dart';
+
+class QuotationItem extends Equatable {
   final String id;
-  // NOTA: No necesitamos quotation_id aquí, se maneja en el Repositorio de Cotizaciones.
-  final String?
-  productId; // Puede ser nulo si el ítem es una descripción personalizada.
+  final String? productId;
   final String description;
   final double quantity;
   final String unit;
   final double unitPrice;
-  final double
-  subtotal; // Este subtotal debe ser calculado: quantity * unitPrice
-  final int position; // Para mantener el orden de los ítems
+  final double subtotal;
+  final int position;
 
-  QuotationItem({
+  const QuotationItem({
     required this.id,
     this.productId,
     required this.description,
@@ -46,4 +44,16 @@ class QuotationItem {
       position: position ?? this.position,
     );
   }
+
+  @override
+  List<Object?> get props => [
+    id,
+    productId,
+    description,
+    quantity,
+    unit,
+    unitPrice,
+    subtotal,
+    position,
+  ];
 }

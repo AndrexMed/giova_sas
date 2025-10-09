@@ -3,7 +3,7 @@ class Product {
   final String name;
   final String? description;
   final double unitPrice; // REAL NOT NULL en la BD
-  final String unit; // Unidad de medida (ej: 'unidad', 'hora', 'kg')
+  final String? unit; // Unidad de medida (ej: 'unidad', 'hora', 'kg')
   final String? category;
   final DateTime createdAt;
 
