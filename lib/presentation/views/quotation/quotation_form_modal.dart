@@ -6,7 +6,10 @@ import 'package:uuid/uuid.dart';
 
 import '../../../domain/entities/quotation.dart';
 import '../../../domain/entities/quotation_item.dart';
+import '../../../domain/entities/client.dart';
+import '../../../domain/entities/product.dart';
 import '../../notifiers/quotation_notifier.dart';
+import '../../../di/providers.dart';
 
 class QuotationFormModal extends ConsumerStatefulWidget {
   final Quotation? quotationToEdit;
@@ -25,6 +28,7 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
   late TextEditingController _clientEmailController;
   late TextEditingController _notesController;
 
+  String? _selectedClientId;
   List<QuotationItem> _items = [];
 
   @override
@@ -35,8 +39,28 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
     _clientEmailController = TextEditingController(text: q?.clientEmail ?? '');
     _notesController = TextEditingController(text: q?.notes ?? '');
 
-    // si viene edición, clonamos los ítems (ya inmutables)
-    _items = q?.items.map((i) => i.copyWith()).toList() ?? [];
+    _selectedClientId = q?.clientId;
+
+    // CORRECCIÓN: Cargar los ítems correctamente
+    if (q != null && q.items.isNotEmpty) {
+      _items = q.items.map((item) {
+        return QuotationItem(
+          id: item.id,
+          productId: item.productId,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          subtotal: item.subtotal,
+          position: item.position,
+        );
+      }).toList();
+
+      print('Ítems cargados: ${_items.length}'); // Debug
+    } else {
+      _items = [];
+      print('No hay ítems para cargar'); // Debug
+    }
   }
 
   @override
@@ -73,7 +97,6 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
   void _removeItemAt(int index) {
     setState(() {
       _items.removeAt(index);
-      // re-asignar posiciones si quieres
       for (int i = 0; i < _items.length; i++) {
         _items[i] = _items[i].copyWith(position: i + 1);
       }
@@ -83,13 +106,12 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
   Future<void> _saveForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // recalcular subtotal por item y totals
     final updatedItems = _items
-        .map((i) => i.copyWith(subtotal: (i.quantity * i.unitPrice)))
+        .map((i) => i.copyWith(subtotal: i.quantity * i.unitPrice))
         .toList();
 
     final subtotal = updatedItems.fold<double>(0.0, (s, i) => s + i.subtotal);
-    const taxPercentage = 19.0; // o toma de config
+    const taxPercentage = 19.0;
     final taxAmount = subtotal * (taxPercentage / 100);
     final total = subtotal + taxAmount;
 
@@ -98,7 +120,7 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
       quotationNumber:
           widget.quotationToEdit?.quotationNumber ??
           'COT-${DateTime.now().millisecondsSinceEpoch}',
-      clientId: '', // si tienes selección de cliente usa su id
+      clientId: _selectedClientId ?? '',
       clientName: _clientNameController.text.trim(),
       clientEmail: _clientEmailController.text.trim().isNotEmpty
           ? _clientEmailController.text.trim()
@@ -128,9 +150,7 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
       final notifier = ref.read(quotationNotifierProvider.notifier);
 
       if (widget.quotationToEdit == null) {
-        await notifier.createQuotation(
-          quotation,
-        ); // adapta nombre si usas 'save' o 'add'
+        await notifier.createQuotation(quotation);
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -157,10 +177,13 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
 
   @override
   Widget build(BuildContext context) {
+    final getAllClients = ref.watch(getClientsUseCaseProvider);
+    final getAllProducts = ref.watch(getAllProductsUseCaseProvider);
+
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
+        constraints: const BoxConstraints(maxWidth: 900),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Form(
@@ -176,64 +199,169 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _clientNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Cliente *',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Nombre del cliente requerido'
-                        : null,
+
+                  // === Cargar clientes y productos una sola vez ===
+                  FutureBuilder<List<Client>>(
+                    future: getAllClients.execute(),
+                    builder: (context, clientsSnapshot) {
+                      if (clientsSnapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const LinearProgressIndicator();
+                      }
+                      if (clientsSnapshot.hasError) {
+                        return Text(
+                          'Error cargando clientes: ${clientsSnapshot.error}',
+                          style: const TextStyle(color: Colors.red),
+                        );
+                      }
+                      final clients = clientsSnapshot.data ?? [];
+
+                      return Column(
+                        children: [
+                          // === Autocomplete de clientes ===
+                          _ClientAutocompleteField(
+                            clients: clients,
+                            initialName: _clientNameController.text,
+                            initialEmail: _clientEmailController.text,
+                            onClientSelected: (client) {
+                              setState(() {
+                                _selectedClientId = client.id;
+                                _clientNameController.text = client.name;
+                                _clientEmailController.text =
+                                    client.email ?? '';
+                              });
+                            },
+                            onNameChanged: (name) {
+                              _clientNameController.text = name;
+                              if (!clients.any((c) => c.name == name)) {
+                                setState(() {
+                                  _selectedClientId = null;
+                                });
+                              }
+                            },
+                            hasSelectedClient: _selectedClientId != null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _clientEmailController,
+                            decoration: const InputDecoration(
+                              labelText: 'Correo (opcional)',
+                              prefixIcon: Icon(Icons.email_outlined),
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _clientEmailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Correo (opcional)',
-                      prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
+
                   const Divider(height: 24),
+
+                  // === ÍTEMS ===
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'Ítems',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.add_circle,
-                          color: Colors.indigo,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
+                      ),
+                      FilledButton.icon(
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Añadir ítem'),
                         onPressed: _addItem,
                       ),
                     ],
                   ),
                   if (_items.isEmpty)
-                    const Text(
-                      'No hay ítems añadidos.',
-                      style: TextStyle(color: Colors.grey),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: Center(
+                        child: Text(
+                          'No hay ítems añadidos. Haz clic en "Añadir ítem"',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
                     ),
-                  const SizedBox(height: 8),
-                  for (int i = 0; i < _items.length; i++)
-                    _QuotationItemField(
-                      key: ValueKey(_items[i].id),
-                      item: _items[i],
-                      onChanged: (updated) => _updateItemAt(i, updated),
-                      onRemove: () => _removeItemAt(i),
-                    ),
+                  const SizedBox(height: 12),
+
+                  // Cargar productos una sola vez para todos los ítems
+                  FutureBuilder<List<Product>>(
+                    future: getAllProducts.execute(),
+                    builder: (context, productsSnapshot) {
+                      if (productsSnapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (productsSnapshot.hasError) {
+                        return Text(
+                          'Error cargando productos: ${productsSnapshot.error}',
+                          style: const TextStyle(color: Colors.red),
+                        );
+                      }
+                      final products = productsSnapshot.data ?? [];
+
+                      return Column(
+                        children: [
+                          for (int i = 0; i < _items.length; i++)
+                            _QuotationItemField(
+                              key: ValueKey(_items[i].id),
+                              item: _items[i],
+                              products: products,
+                              onChanged: (updated) => _updateItemAt(i, updated),
+                              onRemove: () => _removeItemAt(i),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+
                   const Divider(height: 24),
                   TextFormField(
                     controller: _notesController,
                     decoration: const InputDecoration(
                       labelText: 'Notas / Comentarios',
+                      prefixIcon: Icon(Icons.note_outlined),
                     ),
-                    maxLines: 2,
+                    maxLines: 3,
                   ),
                   const SizedBox(height: 16),
+
+                  // === Total preview ===
+                  if (_items.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Total estimado:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '\$${(_items.fold<double>(0.0, (s, i) => s + (i.quantity * i.unitPrice)) * 1.19).toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -242,9 +370,10 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
                         child: const Text('Cancelar'),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton(
+                      FilledButton.icon(
+                        icon: const Icon(Icons.save, size: 18),
                         onPressed: _saveForm,
-                        child: const Text('Guardar'),
+                        label: const Text('Guardar'),
                       ),
                     ],
                   ),
@@ -258,63 +387,453 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
   }
 }
 
-class _QuotationItemField extends StatelessWidget {
+// Widget separado para el autocomplete de clientes (mismo patrón que productos)
+class _ClientAutocompleteField extends StatefulWidget {
+  final List<Client> clients;
+  final String initialName;
+  final String initialEmail;
+  final Function(Client) onClientSelected;
+  final Function(String) onNameChanged;
+  final bool hasSelectedClient;
+
+  const _ClientAutocompleteField({
+    required this.clients,
+    required this.initialName,
+    required this.initialEmail,
+    required this.onClientSelected,
+    required this.onNameChanged,
+    required this.hasSelectedClient,
+  });
+
+  @override
+  State<_ClientAutocompleteField> createState() =>
+      _ClientAutocompleteFieldState();
+}
+
+class _ClientAutocompleteFieldState extends State<_ClientAutocompleteField> {
+  late TextEditingController _nameController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<Client>(
+      initialValue: TextEditingValue(text: _nameController.text),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return const Iterable<Client>.empty();
+        }
+        return widget.clients.where(
+          (client) =>
+              client.name.toLowerCase().contains(
+                textEditingValue.text.toLowerCase(),
+              ) ||
+              (client.email?.toLowerCase().contains(
+                    textEditingValue.text.toLowerCase(),
+                  ) ??
+                  false),
+        );
+      },
+      displayStringForOption: (Client client) => client.name,
+      onSelected: (Client selectedClient) {
+        setState(() {
+          _nameController.text = selectedClient.name;
+        });
+        widget.onClientSelected(selectedClient);
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4.0,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200, maxWidth: 400),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final client = options.elementAt(index);
+                  return ListTile(
+                    dense: true,
+                    leading: const CircleAvatar(
+                      radius: 16,
+                      child: Icon(Icons.person, size: 16),
+                    ),
+                    title: Text(client.name),
+                    subtitle: Text(
+                      client.email ?? 'Sin correo',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => onSelected(client),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
+            if (textEditingController.text.isEmpty &&
+                _nameController.text.isNotEmpty) {
+              textEditingController.text = _nameController.text;
+            }
+
+            return TextFormField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                labelText: 'Cliente (elige o escribe uno nuevo)',
+                prefixIcon: const Icon(Icons.person_outline),
+                hintText: 'Escribe para buscar o crear nuevo',
+                border: const OutlineInputBorder(),
+                isDense: true,
+                suffixIcon: widget.hasSelectedClient
+                    ? const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 20,
+                      )
+                    : null,
+              ),
+              onChanged: (value) {
+                // Solo actualizar sin llamar setState
+                _nameController.text = value;
+              },
+              onEditingComplete: () {
+                // Actualizar solo al terminar
+                widget.onNameChanged(textEditingController.text);
+              },
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Nombre del cliente requerido'
+                  : null,
+            );
+          },
+    );
+  }
+}
+
+class _QuotationItemField extends StatefulWidget {
   final QuotationItem item;
+  final List<Product> products;
   final ValueChanged<QuotationItem> onChanged;
   final VoidCallback onRemove;
 
   const _QuotationItemField({
     super.key,
     required this.item,
+    required this.products,
     required this.onChanged,
     required this.onRemove,
   });
 
   @override
+  State<_QuotationItemField> createState() => _QuotationItemFieldState();
+}
+
+class _QuotationItemFieldState extends State<_QuotationItemField> {
+  late TextEditingController _descriptionController;
+  late TextEditingController _quantityController;
+  late TextEditingController _unitController;
+  late TextEditingController _unitPriceController;
+
+  @override
+  void initState() {
+    super.initState();
+    _descriptionController = TextEditingController(
+      text: widget.item.description,
+    );
+    _quantityController = TextEditingController(
+      text: widget.item.quantity.toString(),
+    );
+    _unitController = TextEditingController(text: widget.item.unit);
+    _unitPriceController = TextEditingController(
+      text: widget.item.unitPrice.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    _quantityController.dispose();
+    _unitController.dispose();
+    _unitPriceController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextFormField(
-            initialValue: item.description,
-            onChanged: (v) => onChanged(item.copyWith(description: v)),
-            decoration: const InputDecoration(labelText: 'Nombre'),
-          ),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // === Autocomplete de Productos ===
+            Autocomplete<Product>(
+              initialValue: TextEditingValue(text: _descriptionController.text),
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                if (textEditingValue.text.isEmpty) {
+                  return const Iterable<Product>.empty();
+                }
+                return widget.products.where(
+                  (product) =>
+                      product.name.toLowerCase().contains(
+                        textEditingValue.text.toLowerCase(),
+                      ) ||
+                      (product.description?.toLowerCase().contains(
+                            textEditingValue.text.toLowerCase(),
+                          ) ??
+                          false),
+                );
+              },
+              displayStringForOption: (Product product) => product.name,
+              onSelected: (Product selectedProduct) {
+                setState(() {
+                  _descriptionController.text =
+                      selectedProduct.description ?? selectedProduct.name;
+                  _unitController.text = selectedProduct.unit ?? 'unidad';
+                  _unitPriceController.text = selectedProduct.unitPrice
+                      .toString();
+                });
+
+                widget.onChanged(
+                  widget.item.copyWith(
+                    productId: selectedProduct.id,
+                    description:
+                        selectedProduct.description ?? selectedProduct.name,
+                    unit: selectedProduct.unit ?? 'unidad',
+                    unitPrice: selectedProduct.unitPrice,
+                  ),
+                );
+              },
+              optionsViewBuilder: (context, onSelected, options) {
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 4.0,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: 200,
+                        maxWidth: 400,
+                      ),
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        itemBuilder: (context, index) {
+                          final product = options.elementAt(index);
+                          return ListTile(
+                            dense: true,
+                            title: Text(product.name),
+                            subtitle: Text(
+                              '${product.description ?? ''} - \${product.unitPrice}/${product.unit ?? 'unidad'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => onSelected(product),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
+              fieldViewBuilder:
+                  (
+                    context,
+                    textEditingController,
+                    focusNode,
+                    onFieldSubmitted,
+                  ) {
+                    // Inicializar solo una vez
+                    if (textEditingController.text.isEmpty &&
+                        _descriptionController.text.isNotEmpty) {
+                      textEditingController.text = _descriptionController.text;
+                    }
+
+                    return TextFormField(
+                      controller: textEditingController,
+                      focusNode: focusNode,
+                      decoration: InputDecoration(
+                        labelText: 'Producto / Descripción',
+                        hintText: 'Busca un producto o escribe descripción',
+                        prefixIcon: const Icon(Icons.inventory_2_outlined),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        suffixIcon: widget.item.productId != null
+                            ? const Icon(
+                                Icons.link,
+                                color: Colors.green,
+                                size: 20,
+                              )
+                            : null,
+                      ),
+                      onChanged: (value) {
+                        // Solo actualizar el controlador interno
+                        _descriptionController.text = value;
+                      },
+                      onEditingComplete: () {
+                        // Actualizar solo al terminar de editar
+                        widget.onChanged(
+                          widget.item.copyWith(
+                            description: textEditingController.text,
+                            productId: null,
+                          ),
+                        );
+                      },
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Descripción requerida'
+                          : null,
+                    );
+                  },
+            ),
+
+            const SizedBox(height: 12),
+
+            // === Campos de cantidad, unidad y precio ===
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _quantityController,
+                    onChanged: (v) {
+                      // Solo actualizar localmente
+                      _quantityController.text = v;
+                    },
+                    onEditingComplete: () {
+                      // Actualizar al terminar
+                      widget.onChanged(
+                        widget.item.copyWith(
+                          quantity:
+                              double.tryParse(_quantityController.text) ?? 0,
+                        ),
+                      );
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Cantidad',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      prefixIcon: Icon(Icons.numbers),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      final val = double.tryParse(v ?? '');
+                      if (val == null || val <= 0) return 'Cantidad inválida';
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _unitController,
+                    onChanged: (v) {
+                      // Solo actualizar localmente
+                      _unitController.text = v;
+                    },
+                    onEditingComplete: () {
+                      // Actualizar al terminar
+                      widget.onChanged(
+                        widget.item.copyWith(unit: _unitController.text),
+                      );
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Unidad',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      hintText: 'ej: unidad, hora',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _unitPriceController,
+                    onChanged: (v) {
+                      // Solo actualizar localmente
+                      _unitPriceController.text = v;
+                    },
+                    onEditingComplete: () {
+                      // Actualizar al terminar
+                      widget.onChanged(
+                        widget.item.copyWith(
+                          unitPrice:
+                              double.tryParse(_unitPriceController.text) ?? 0.0,
+                        ),
+                      );
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Precio Unitario',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      prefixText: '\$ ',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      final val = double.tryParse(v ?? '');
+                      if (val == null || val < 0) return 'Precio inválido';
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Subtotal calculado
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Subtotal',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                      Text(
+                        '\$${(widget.item.quantity * widget.item.unitPrice).toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  color: Colors.red,
+                  tooltip: 'Eliminar ítem',
+                  onPressed: widget.onRemove,
+                ),
+              ],
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextFormField(
-            initialValue: item.quantity.toString(),
-            onChanged: (v) =>
-                onChanged(item.copyWith(quantity: double.tryParse(v) ?? 0.0)),
-            decoration: const InputDecoration(labelText: 'Cantidad'),
-            keyboardType: TextInputType.number,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextFormField(
-            initialValue: item.unit,
-            onChanged: (v) => onChanged(item.copyWith(unit: v)),
-            decoration: const InputDecoration(labelText: 'Unidad'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextFormField(
-            initialValue: item.unitPrice.toString(),
-            onChanged: (v) =>
-                onChanged(item.copyWith(unitPrice: double.tryParse(v) ?? 0.0)),
-            decoration: const InputDecoration(labelText: 'Precio Unitario'),
-            keyboardType: TextInputType.number,
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.delete),
-          color: Colors.red,
-          onPressed: onRemove,
-        ),
-      ],
+      ),
     );
   }
 }

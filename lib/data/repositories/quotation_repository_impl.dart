@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../../domain/entities/quotation.dart';
 import '../../domain/entities/quotation_item.dart';
 import '../../domain/repositories/quotation_repository.dart';
-import '../../datasources/database_helper.dart'; // Importa tu helper de la BD.
+import '../../datasources/database_helper.dart';
 
 /// Implementación del contrato QuotationRepository usando DatabaseHelper (sqflite).
 class QuotationRepositoryImpl implements QuotationRepository {
@@ -34,7 +34,7 @@ class QuotationRepositoryImpl implements QuotationRepository {
   Map<String, dynamic> _itemToMap(QuotationItem item, String quotationId) {
     return {
       'id': item.id,
-      'quotation_id': quotationId, // Clave foránea
+      'quotation_id': quotationId,
       'product_id': item.productId,
       'description': item.description,
       'quantity': item.quantity,
@@ -71,7 +71,7 @@ class QuotationRepositoryImpl implements QuotationRepository {
       termsConditions: map['terms_conditions'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
-      items: items, // Se pasan los ítems ya cargados/vacíos
+      items: items,
     );
   }
 
@@ -114,11 +114,26 @@ class QuotationRepositoryImpl implements QuotationRepository {
   @override
   Future<List<Quotation>> getAllQuotations() async {
     final db = await _dbHelper.database;
-    // NOTA: Se consulta la tabla principal sin cargar los ítems por rendimiento.
-    final maps = await db.query(_quotationTable, orderBy: 'created_at DESC');
 
-    // Mapea la lista de Maps a una lista de Entidades Quotation con ítems vacíos.
-    return maps.map((map) => _quotationFromMap(map, [])).toList();
+    // Obtener todas las cotizaciones
+    final quotationMaps = await db.query(
+      _quotationTable,
+      orderBy: 'created_at DESC',
+    );
+
+    // Para cada cotización, cargar sus ítems
+    final quotations = <Quotation>[];
+    for (var quotationMap in quotationMaps) {
+      final quotationId = quotationMap['id'] as String;
+
+      // Cargar los ítems de esta cotización
+      final items = await getItemsByQuotationId(quotationId);
+
+      // Crear la cotización con sus ítems
+      quotations.add(_quotationFromMap(quotationMap, items));
+    }
+
+    return quotations;
   }
 
   @override
@@ -134,7 +149,7 @@ class QuotationRepositoryImpl implements QuotationRepository {
       return null;
     }
 
-    // Obtiene los ítems relacionados de forma sincrónica.
+    // Obtiene los ítems relacionados.
     final items = await getItemsByQuotationId(id);
 
     // Combina los datos de la cotización principal y los ítems.
