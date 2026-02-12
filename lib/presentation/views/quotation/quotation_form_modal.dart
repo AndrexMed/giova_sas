@@ -31,6 +31,8 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
 
   String? _selectedClientId;
   List<QuotationItem> _items = [];
+  bool _includeIva = true;
+  double _configTaxPercentage = 19.0;
 
   @override
   void initState() {
@@ -44,6 +46,11 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
     );
 
     _selectedClientId = q?.clientId;
+
+    // Si estamos editando, determinar si tenía IVA
+    if (q != null) {
+      _includeIva = q.taxPercentage > 0;
+    }
 
     // CORRECCIÓN: Cargar los ítems correctamente
     if (q != null && q.items.isNotEmpty) {
@@ -118,7 +125,7 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
         double.tryParse(_discountPercentageController.text) ?? 0.0;
     final discountAmount = subtotal * (discountPercentage / 100);
     final subtotalAfterDiscount = subtotal - discountAmount;
-    const taxPercentage = 19.0;
+    final taxPercentage = _includeIva ? _configTaxPercentage : 0.0;
     final taxAmount = subtotalAfterDiscount * (taxPercentage / 100);
     final total = subtotalAfterDiscount + taxAmount;
 
@@ -199,6 +206,12 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
   Widget build(BuildContext context) {
     final getAllClients = ref.watch(getClientsUseCaseProvider);
     final getAllProducts = ref.watch(getAllProductsUseCaseProvider);
+
+    // Leer el % de IVA desde la configuracion de empresa
+    final configAsync = ref.watch(getCompanyConfigProvider);
+    configAsync.whenData((config) {
+      _configTaxPercentage = config.defaultTaxPercentage;
+    });
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
@@ -371,6 +384,27 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
                   ),
                   const SizedBox(height: 12),
 
+                  // === Toggle IVA ===
+                  SwitchListTile(
+                    title: Text(
+                      'Incluir IVA (${_configTaxPercentage.toStringAsFixed(0)}%)',
+                    ),
+                    subtitle: Text(
+                      _includeIva
+                          ? 'Se aplicara IVA del ${_configTaxPercentage.toStringAsFixed(0)}%'
+                          : 'Sin IVA - precios finales',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    secondary: Icon(
+                      Icons.receipt_outlined,
+                      color: _includeIva ? Colors.indigo : Colors.grey,
+                    ),
+                    value: _includeIva,
+                    onChanged: (value) => setState(() => _includeIva = value),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 12),
+
                   TextFormField(
                     controller: _notesController,
                     decoration: const InputDecoration(
@@ -393,7 +427,8 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
                           0.0;
                       final discAmt = subtotal * (discPct / 100);
                       final afterDiscount = subtotal - discAmt;
-                      final iva = afterDiscount * 0.19;
+                      final taxPct = _includeIva ? _configTaxPercentage : 0.0;
+                      final iva = afterDiscount * (taxPct / 100);
                       final total = afterDiscount + iva;
 
                       return Container(
@@ -409,8 +444,10 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
                             if (discPct > 0)
                               _totalRow('Descuento ($discPct%)',
                                   '-\$${discAmt.toStringAsFixed(0)}'),
-                            _totalRow(
-                                'IVA (19%)', '\$${iva.toStringAsFixed(0)}'),
+                            if (_includeIva)
+                              _totalRow(
+                                  'IVA (${taxPct.toStringAsFixed(0)}%)',
+                                  '\$${iva.toStringAsFixed(0)}'),
                             const Divider(),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,

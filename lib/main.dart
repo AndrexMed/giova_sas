@@ -7,6 +7,7 @@ import 'presentation/views/product/product_list_view.dart';
 import 'presentation/views/product/product_form_modal.dart';
 import 'presentation/views/quotation/quotation_list_page.dart';
 import 'presentation/views/quotation/quotation_form_modal.dart';
+import 'presentation/views/settings/company_config_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case MenuOption.quotations:
         return const QuotationListView();
       case MenuOption.settings:
-        return const Center(child: Text('Configuracion (En desarrollo)'));
+        return const CompanyConfigView();
     }
   }
 
