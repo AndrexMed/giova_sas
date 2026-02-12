@@ -1,113 +1,174 @@
 import 'package:flutter/material.dart';
-import 'package:giova_sas/domain/usecases/quotation/get_quotations.dart';
-import 'package:uuid/uuid.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../domain/entities/quotation.dart';
-import '../../../domain/usecases/quotation/get_quotations.dart';
-import '../../../domain/usecases/quotation/delete_quotation.dart';
-import '../../../data/repositories/quotation_repository_impl.dart';
-import '../../../datasources/database_helper.dart';
+import '../../notifiers/quotation_notifier.dart';
 import 'quotation_form_modal.dart';
+import 'quotation_detail_page.dart';
 
-class QuotationListView extends StatefulWidget {
+class QuotationListView extends ConsumerWidget {
   const QuotationListView({super.key});
 
   @override
-  State<QuotationListView> createState() => _QuotationListPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final quotationListAsync = ref.watch(quotationNotifierProvider);
+
+    return quotationListAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, stack) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Error al cargar cotizaciones: $err',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      ),
+      data: (quotations) {
+        if (quotations.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.receipt_long_outlined, size: 80, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'No hay cotizaciones registradas.',
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Presiona "+" para crear la primera.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: quotations.length,
+          itemBuilder: (context, index) {
+            final q = quotations[index];
+            return QuotationListTile(quotation: q);
+          },
+        );
+      },
+    );
+  }
 }
 
-class _QuotationListPageState extends State<QuotationListView> {
-  late final QuotationRepositoryImpl _repository;
-  late final GetQuotations _getAllQuotations;
-  late final DeleteQuotation _deleteQuotation;
+class QuotationListTile extends ConsumerWidget {
+  final Quotation quotation;
 
-  List<Quotation> _quotations = [];
-  bool _loading = true;
-  String? _error;
+  const QuotationListTile({required this.quotation, super.key});
 
-  @override
-  void initState() {
-    super.initState();
-    _repository = QuotationRepositoryImpl(DatabaseHelper.instance);
-    _getAllQuotations = GetQuotations(_repository);
-    _deleteQuotation = DeleteQuotation(_repository);
-    _loadQuotations();
-  }
-
-  Future<void> _loadQuotations() async {
-    setState(() => _loading = true);
-    try {
-      final items = await _getAllQuotations.execute();
-      setState(() {
-        _quotations = items;
-        _error = null;
-      });
-    } catch (e) {
-      setState(() => _error = 'Error al cargar cotizaciones: $e');
-    } finally {
-      setState(() => _loading = false);
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Borrador':
+        return Colors.grey;
+      case 'Enviada':
+        return Colors.blue;
+      case 'Aceptada':
+        return Colors.green;
+      case 'Rechazada':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 
-  void _openForm([Quotation? quotation]) async {
-    await showDialog(
-      context: context,
-      builder: (_) => QuotationFormModal(quotationToEdit: quotation),
-    );
-    _loadQuotations();
-  }
-
-  void _delete(String id) async {
-    await _deleteQuotation.execute(id);
-    _loadQuotations();
-  }
-
   @override
-  Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text(_error!));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'es_CO',
+      symbol: '\$',
+      decimalDigits: 0,
+    );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cotizaciones'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadQuotations,
-          ),
-        ],
-      ),
-      body: _quotations.isEmpty
-          ? const Center(child: Text('No hay cotizaciones registradas'))
-          : ListView.builder(
-              itemCount: _quotations.length,
-              itemBuilder: (context, i) {
-                final q = _quotations[i];
-                return ListTile(
-                  leading: const Icon(Icons.receipt_long),
-                  title: Text('Cotización #${q.quotationNumber}'),
-                  subtitle: Text(
-                    '${q.clientName}  ·  Total: ${q.total.toStringAsFixed(2)}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _openForm(q),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _delete(q.id),
-                      ),
-                    ],
-                  ),
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      elevation: 2,
+      child: ListTile(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => QuotationDetailPage(quotationId: quotation.id),
+            ),
+          );
+        },
+        leading: const Icon(Icons.receipt_long, color: Colors.indigo),
+        title: Text(
+          'Cotizacion #${quotation.quotationNumber}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${quotation.clientName}  ·  ${currencyFormat.format(quotation.total)}',
+              ),
+            ),
+            Chip(
+              label: Text(
+                quotation.status,
+                style: const TextStyle(color: Colors.white, fontSize: 11),
+              ),
+              backgroundColor: _statusColor(quotation.status),
+              padding: EdgeInsets.zero,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blueGrey),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) =>
+                      QuotationFormModal(quotationToEdit: quotation),
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openForm(),
-        child: const Icon(Icons.add),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.redAccent),
+              onPressed: () => _confirmDelete(context, ref),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Eliminacion'),
+        content: Text(
+          'Estas seguro de que quieres eliminar la cotizacion #${quotation.quotationNumber}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ref
+                  .read(quotationNotifierProvider.notifier)
+                  .deleteQuotation(quotation.id);
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
       ),
     );
   }

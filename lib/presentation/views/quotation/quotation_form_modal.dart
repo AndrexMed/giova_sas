@@ -27,6 +27,7 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
   late TextEditingController _clientNameController;
   late TextEditingController _clientEmailController;
   late TextEditingController _notesController;
+  late TextEditingController _discountPercentageController;
 
   String? _selectedClientId;
   List<QuotationItem> _items = [];
@@ -38,6 +39,9 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
     _clientNameController = TextEditingController(text: q?.clientName ?? '');
     _clientEmailController = TextEditingController(text: q?.clientEmail ?? '');
     _notesController = TextEditingController(text: q?.notes ?? '');
+    _discountPercentageController = TextEditingController(
+      text: (q?.discountPercentage ?? 0).toString(),
+    );
 
     _selectedClientId = q?.clientId;
 
@@ -56,10 +60,8 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
         );
       }).toList();
 
-      print('Ítems cargados: ${_items.length}'); // Debug
     } else {
       _items = [];
-      print('No hay ítems para cargar'); // Debug
     }
   }
 
@@ -68,6 +70,7 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
     _clientNameController.dispose();
     _clientEmailController.dispose();
     _notesController.dispose();
+    _discountPercentageController.dispose();
     super.dispose();
   }
 
@@ -111,9 +114,13 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
         .toList();
 
     final subtotal = updatedItems.fold<double>(0.0, (s, i) => s + i.subtotal);
+    final discountPercentage =
+        double.tryParse(_discountPercentageController.text) ?? 0.0;
+    final discountAmount = subtotal * (discountPercentage / 100);
+    final subtotalAfterDiscount = subtotal - discountAmount;
     const taxPercentage = 19.0;
-    final taxAmount = subtotal * (taxPercentage / 100);
-    final total = subtotal + taxAmount;
+    final taxAmount = subtotalAfterDiscount * (taxPercentage / 100);
+    final total = subtotalAfterDiscount + taxAmount;
 
     final quotation = Quotation(
       id: widget.quotationToEdit?.id ?? _uuid.v4(),
@@ -134,8 +141,8 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
       subtotal: subtotal,
       taxPercentage: taxPercentage,
       taxAmount: taxAmount,
-      discountPercentage: widget.quotationToEdit?.discountPercentage ?? 0,
-      discountAmount: widget.quotationToEdit?.discountAmount ?? 0,
+      discountPercentage: discountPercentage,
+      discountAmount: discountAmount,
       total: total,
       status: widget.quotationToEdit?.status ?? 'Borrador',
       notes: _notesController.text.trim(),
@@ -173,6 +180,19 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
+  }
+
+  Widget _totalRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13)),
+          Text(value, style: const TextStyle(fontSize: 13)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -324,6 +344,33 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
                   ),
 
                   const Divider(height: 24),
+
+                  // === Descuento ===
+                  TextFormField(
+                    controller: _discountPercentageController,
+                    decoration: const InputDecoration(
+                      labelText: 'Descuento (%)',
+                      prefixIcon: Icon(Icons.discount_outlined),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      suffixText: '%',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty) {
+                        final val = double.tryParse(v);
+                        if (val == null || val < 0 || val > 100) {
+                          return 'Valor entre 0 y 100';
+                        }
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
                   TextFormField(
                     controller: _notesController,
                     decoration: const InputDecoration(
@@ -336,30 +383,55 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
 
                   // === Total preview ===
                   if (_items.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Total estimado:',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            '\$${(_items.fold<double>(0.0, (s, i) => s + (i.quantity * i.unitPrice)) * 1.19).toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.blue.shade700,
+                    Builder(builder: (context) {
+                      final subtotal = _items.fold<double>(
+                        0.0,
+                        (s, i) => s + (i.quantity * i.unitPrice),
+                      );
+                      final discPct = double.tryParse(
+                              _discountPercentageController.text) ??
+                          0.0;
+                      final discAmt = subtotal * (discPct / 100);
+                      final afterDiscount = subtotal - discAmt;
+                      final iva = afterDiscount * 0.19;
+                      final total = afterDiscount + iva;
+
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            _totalRow('Subtotal',
+                                '\$${subtotal.toStringAsFixed(0)}'),
+                            if (discPct > 0)
+                              _totalRow('Descuento ($discPct%)',
+                                  '-\$${discAmt.toStringAsFixed(0)}'),
+                            _totalRow(
+                                'IVA (19%)', '\$${iva.toStringAsFixed(0)}'),
+                            const Divider(),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Total estimado:',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  '\$${total.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
+                          ],
+                        ),
+                      );
+                    }),
                   const SizedBox(height: 16),
 
                   Row(

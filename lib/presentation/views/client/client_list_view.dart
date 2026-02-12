@@ -1,97 +1,62 @@
-// lib/presentation/views/client/client_list_view.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/entities/client.dart';
 import '../../notifiers/client_notifier.dart';
 import 'client_form_modal.dart';
 
-/// Vista para mostrar la lista de clientes.
 class ClientListView extends ConsumerWidget {
   const ClientListView({super.key});
 
-  void _showAddClientForm(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (context) => const ClientFormModal(),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Observar el estado de los clientes
     final clientListAsync = ref.watch(clientNotifierProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Clientes'),
-        automaticallyImplyLeading: false,
-      ),
-      body: clientListAsync.when(
-        // 2. Estado de Carga
-        loading: () => const Center(child: CircularProgressIndicator()),
-
-        // 3. Estado de Error
-        error: (err, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Error al cargar clientes: $err',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red),
-            ),
+    return clientListAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, stack) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Error al cargar clientes: $err',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.red),
           ),
         ),
-
-        // 4. Estado con Datos
-        data: (clients) {
-          if (clients.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.person_add_disabled,
-                    size: 80,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No hay clientes registrados.',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Presiona "+" para añadir el primero.',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: clients.length,
-            itemBuilder: (context, index) {
-              final client = clients[index];
-              return ClientListTile(client: client);
-            },
+      ),
+      data: (clients) {
+        if (clients.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.person_add_disabled, size: 80, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'No hay clientes registrados.',
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Presiona "+" para anadir el primero.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ],
+            ),
           );
-        },
-      ),
+        }
 
-      // 5. Botón para añadir clientes
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddClientForm(context),
-        child: const Icon(Icons.add),
-      ),
+        return ListView.builder(
+          itemCount: clients.length,
+          itemBuilder: (context, index) {
+            final client = clients[index];
+            return ClientListTile(client: client);
+          },
+        );
+      },
     );
   }
 }
 
-/// Widget para mostrar la información de un cliente en la lista
 class ClientListTile extends ConsumerWidget {
   final Client client;
 
@@ -114,17 +79,18 @@ class ClientListTile extends ConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Botón de Edición (Faltaría implementar el formulario de edición)
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.blueGrey),
               onPressed: () {
-                // TODO: Implementar showModalBottomSheet con formulario para editar
-                // ScaffoldMessenger.of(context).showSnackBar(
-                //   SnackBar(content: Text('Editar: ${client.name}')),
-                // );
+                showDialog(
+                  context: context,
+                  barrierDismissible: true,
+                  barrierColor: Colors.black54,
+                  builder: (context) =>
+                      ClientFormModal(clientToEdit: client),
+                );
               },
             ),
-            // Botón de Eliminación
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.redAccent),
               onPressed: () => _confirmDelete(context, ref),
@@ -139,9 +105,9 @@ class ClientListTile extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirmar Eliminación'),
+        title: const Text('Confirmar Eliminacion'),
         content: Text(
-          '¿Estás seguro de que quieres eliminar a ${client.name}?',
+          'Estas seguro de que quieres eliminar a ${client.name}?',
         ),
         actions: [
           TextButton(
@@ -151,7 +117,6 @@ class ClientListTile extends ConsumerWidget {
           FilledButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // Llamar al Notifier para eliminar
               ref.read(clientNotifierProvider.notifier).deleteClient(client.id);
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),

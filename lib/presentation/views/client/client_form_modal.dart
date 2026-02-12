@@ -1,14 +1,12 @@
-// lib/presentation/views/client/client_form_modal.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../domain/entities/client.dart';
 import '../../notifiers/client_notifier.dart';
 
 class ClientFormModal extends ConsumerStatefulWidget {
-  final bool isEditing;
-  final Map<String, dynamic>? clientToEdit;
+  final Client? clientToEdit;
 
-  const ClientFormModal({super.key, this.isEditing = false, this.clientToEdit});
+  const ClientFormModal({super.key, this.clientToEdit});
 
   @override
   ConsumerState<ClientFormModal> createState() => _ClientFormModalState();
@@ -28,15 +26,14 @@ class _ClientFormModalState extends ConsumerState<ClientFormModal> {
   @override
   void initState() {
     super.initState();
-    // Si estamos editando, precargamos los datos
     if (widget.clientToEdit != null) {
-      final data = widget.clientToEdit!;
-      _nameController.text = data['name'] ?? '';
-      _emailController.text = data['email'] ?? '';
-      _phoneController.text = data['phone'] ?? '';
-      _companyController.text = data['company'] ?? '';
-      _addressController.text = data['address'] ?? '';
-      _identificationController.text = data['identification'] ?? '';
+      final c = widget.clientToEdit!;
+      _nameController.text = c.name;
+      _emailController.text = c.email ?? '';
+      _phoneController.text = c.phone ?? '';
+      _companyController.text = c.company ?? '';
+      _addressController.text = c.address ?? '';
+      _identificationController.text = c.identification ?? '';
     }
   }
 
@@ -47,27 +44,49 @@ class _ClientFormModalState extends ConsumerState<ClientFormModal> {
     try {
       final notifier = ref.read(clientNotifierProvider.notifier);
 
-      await notifier.createClient(
-        name: _nameController.text,
-        email: _emailController.text.isNotEmpty ? _emailController.text : null,
-        phone: _phoneController.text.isNotEmpty ? _phoneController.text : null,
-        company: _companyController.text.isNotEmpty
-            ? _companyController.text
-            : null,
-        address: _addressController.text.isNotEmpty
-            ? _addressController.text
-            : null,
-        identification: _identificationController.text.isNotEmpty
-            ? _identificationController.text
-            : null,
-      );
+      if (widget.clientToEdit != null) {
+        final updatedClient = widget.clientToEdit!.copyWith(
+          name: _nameController.text,
+          email:
+              _emailController.text.isNotEmpty ? _emailController.text : null,
+          phone:
+              _phoneController.text.isNotEmpty ? _phoneController.text : null,
+          company: _companyController.text.isNotEmpty
+              ? _companyController.text
+              : null,
+          address: _addressController.text.isNotEmpty
+              ? _addressController.text
+              : null,
+          identification: _identificationController.text.isNotEmpty
+              ? _identificationController.text
+              : null,
+        );
+        await notifier.updateClient(updatedClient);
+      } else {
+        await notifier.createClient(
+          name: _nameController.text,
+          email:
+              _emailController.text.isNotEmpty ? _emailController.text : null,
+          phone:
+              _phoneController.text.isNotEmpty ? _phoneController.text : null,
+          company: _companyController.text.isNotEmpty
+              ? _companyController.text
+              : null,
+          address: _addressController.text.isNotEmpty
+              ? _addressController.text
+              : null,
+          identification: _identificationController.text.isNotEmpty
+              ? _identificationController.text
+              : null,
+        );
+      }
 
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error al guardar cliente: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar cliente: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -87,7 +106,7 @@ class _ClientFormModalState extends ConsumerState<ClientFormModal> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.isEditing;
+    final isEditing = widget.clientToEdit != null;
     return AlertDialog(
       title: Text(isEditing ? 'Editar Cliente' : 'Nuevo Cliente'),
       content: Form(
@@ -118,7 +137,7 @@ class _ClientFormModalState extends ConsumerState<ClientFormModal> {
               TextFormField(
                 controller: _identificationController,
                 decoration: const InputDecoration(
-                  labelText: 'Cédula / Identificación',
+                  labelText: 'Cedula / Identificacion',
                   prefixIcon: Icon(Icons.badge),
                 ),
               ),
@@ -126,7 +145,7 @@ class _ClientFormModalState extends ConsumerState<ClientFormModal> {
               TextFormField(
                 controller: _phoneController,
                 decoration: const InputDecoration(
-                  labelText: 'Teléfono',
+                  labelText: 'Telefono',
                   prefixIcon: Icon(Icons.phone),
                 ),
                 keyboardType: TextInputType.phone,
@@ -144,7 +163,7 @@ class _ClientFormModalState extends ConsumerState<ClientFormModal> {
               TextFormField(
                 controller: _addressController,
                 decoration: const InputDecoration(
-                  labelText: 'Dirección',
+                  labelText: 'Direccion',
                   prefixIcon: Icon(Icons.location_on),
                 ),
               ),

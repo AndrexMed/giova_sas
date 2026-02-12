@@ -1,10 +1,12 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'presentation/views/client/client_list_view.dart';
+import 'presentation/views/client/client_form_modal.dart';
 import 'presentation/views/product/product_list_view.dart';
+import 'presentation/views/product/product_form_modal.dart';
 import 'presentation/views/quotation/quotation_list_page.dart';
+import 'presentation/views/quotation/quotation_form_modal.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +40,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Enum para las opciones del menú
 enum MenuOption { clients, products, quotations, settings }
 
 class HomeScreen extends StatefulWidget {
@@ -54,13 +55,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String _getTitle() {
     switch (_currentView) {
       case MenuOption.clients:
-        return 'Gestión de Clientes';
+        return 'Gestion de Clientes';
       case MenuOption.products:
-        return 'Gestión de Productos/Servicios';
+        return 'Gestion de Productos/Servicios';
       case MenuOption.quotations:
         return 'Lista de Cotizaciones';
       case MenuOption.settings:
-        return 'Configuración de la Empresa';
+        return 'Configuracion de la Empresa';
     }
   }
 
@@ -73,7 +74,48 @@ class _HomeScreenState extends State<HomeScreen> {
       case MenuOption.quotations:
         return const QuotationListView();
       case MenuOption.settings:
-        return const Center(child: Text('Configuración (En desarrollo)'));
+        return const Center(child: Text('Configuracion (En desarrollo)'));
+    }
+  }
+
+  Widget? _getFab() {
+    switch (_currentView) {
+      case MenuOption.clients:
+        return FloatingActionButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              barrierDismissible: true,
+              barrierColor: Colors.black54,
+              builder: (context) => const ClientFormModal(),
+            );
+          },
+          child: const Icon(Icons.add),
+        );
+      case MenuOption.products:
+        return FloatingActionButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              barrierDismissible: true,
+              barrierColor: Colors.black54,
+              builder: (context) => const ProductFormModal(),
+            );
+          },
+          child: const Icon(Icons.add),
+        );
+      case MenuOption.quotations:
+        return FloatingActionButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => const QuotationFormModal(),
+            );
+          },
+          child: const Icon(Icons.add),
+        );
+      case MenuOption.settings:
+        return null;
     }
   }
 
@@ -88,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const DrawerHeader(
               decoration: BoxDecoration(color: Colors.indigo),
               child: Text(
-                'Menú Principal',
+                'Menu Principal',
                 style: TextStyle(color: Colors.white, fontSize: 24),
               ),
             ),
@@ -122,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.settings),
-              title: const Text('Configuración'),
+              title: const Text('Configuracion'),
               selected: _currentView == MenuOption.settings,
               onTap: () {
                 setState(() => _currentView = MenuOption.settings);
@@ -133,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: _getBody(),
-      // 👇 Sin FloatingActionButton aquí
+      floatingActionButton: _getFab(),
     );
   }
 }

@@ -8,11 +8,15 @@ import '../../datasources/database_helper.dart';
 import '../data/repositories/client_repository_impl.dart';
 import '../data/repositories/product_repository_impl.dart';
 import '../data/repositories/quotation_repository_impl.dart';
+import '../data/repositories/company_config_repository_impl.dart';
+import '../data/services/pdf_service.dart';
 
 // --- Capa de Dominio (Domain Layer) ---
+import '../domain/entities/company_config.dart';
 import '../domain/repositories/client_repository.dart';
 import '../domain/repositories/quotation_repository.dart';
 import '../domain/repositories/product_repository.dart';
+import '../domain/repositories/company_config_repository.dart';
 
 // Use Cases de Clientes
 import '../domain/usecases/client/update_client.dart';
@@ -161,3 +165,21 @@ final updateQuotationUseCaseProvider = Provider<UpdateQuotation>((ref) {
   return UpdateQuotation(repository);
 });
 // -------------------------------------
+
+// --- CompanyConfig ---
+
+final companyConfigRepositoryProvider = Provider<CompanyConfigRepository>((ref) {
+  final dbHelper = ref.watch(databaseHelperProvider);
+  return CompanyConfigRepositoryImpl(dbHelper);
+});
+
+final getCompanyConfigProvider = FutureProvider<CompanyConfig>((ref) {
+  final repository = ref.watch(companyConfigRepositoryProvider);
+  return repository.getCompanyConfig();
+});
+
+// --- PDF Service ---
+
+final pdfServiceProvider = Provider<PdfService>((ref) {
+  return PdfService();
+});

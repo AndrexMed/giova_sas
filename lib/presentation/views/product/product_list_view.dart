@@ -1,108 +1,71 @@
-// lib/presentation/views/product/product_list_view.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/entities/product.dart';
 import '../../notifiers/product_notifier.dart';
 import 'product_form_modal.dart';
 
-/// Vista para mostrar la lista de productos o servicios.
 class ProductListView extends ConsumerWidget {
   const ProductListView({super.key});
-
-  /// Abre el modal para crear un nuevo producto
-  void _showAddProductForm(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (context) => const ProductFormModal(),
-    );
-  }
-
-  /// Abre el modal para editar un producto existente
-  void _showEditProductForm(BuildContext context, Product product) {
-    showDialog(
-      context: context,
-      builder: (context) => ProductFormModal(productToEdit: product),
-    );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final productListAsync = ref.watch(productNotifierProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Productos / Servicios'),
-        automaticallyImplyLeading: false,
-      ),
-      body: productListAsync.when(
-        // Estado de carga
-        loading: () => const Center(child: CircularProgressIndicator()),
-
-        // Estado de error
-        error: (err, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Error al cargar productos: $err',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red),
-            ),
+    return productListAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, stack) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Error al cargar productos: $err',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.red),
           ),
         ),
-
-        // Estado con datos
-        data: (products) {
-          if (products.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.inventory_2_outlined,
-                    size: 80,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No hay productos registrados.',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Presiona "+" para añadir el primero.',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              final product = products[index];
-              return ProductListTile(
-                product: product,
-                onEdit: () => _showEditProductForm(context, product),
-              );
-            },
+      ),
+      data: (products) {
+        if (products.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'No hay productos registrados.',
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Presiona "+" para anadir el primero.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ],
+            ),
           );
-        },
-      ),
+        }
 
-      // Botón flotante para crear
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddProductForm(context),
-        child: const Icon(Icons.add),
-      ),
+        return ListView.builder(
+          itemCount: products.length,
+          itemBuilder: (context, index) {
+            final product = products[index];
+            return ProductListTile(
+              product: product,
+              onEdit: () {
+                showDialog(
+                  context: context,
+                  builder: (context) =>
+                      ProductFormModal(productToEdit: product),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
 
-/// Widget que representa cada producto en la lista
 class ProductListTile extends ConsumerWidget {
   final Product product;
   final VoidCallback onEdit;
@@ -131,12 +94,10 @@ class ProductListTile extends ConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Editar
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.blueGrey),
               onPressed: onEdit,
             ),
-            // Eliminar
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.redAccent),
               onPressed: () => _confirmDelete(context, ref),
@@ -151,8 +112,8 @@ class ProductListTile extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirmar eliminación'),
-        content: Text('¿Deseas eliminar "${product.name}"?'),
+        title: const Text('Confirmar eliminacion'),
+        content: Text('Deseas eliminar "${product.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
