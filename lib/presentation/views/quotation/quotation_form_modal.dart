@@ -129,6 +129,13 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
     final taxAmount = subtotalAfterDiscount * (taxPercentage / 100);
     final total = subtotalAfterDiscount + taxAmount;
 
+    // Leer terminos por defecto de la configuracion
+    String? defaultTerms;
+    final configAsync = ref.read(getCompanyConfigProvider);
+    configAsync.whenData((config) {
+      defaultTerms = config.defaultTermsConditions;
+    });
+
     final quotation = Quotation(
       id: widget.quotationToEdit?.id ?? _uuid.v4(),
       quotationNumber:
@@ -154,7 +161,7 @@ class _QuotationFormModalState extends ConsumerState<QuotationFormModal> {
       status: widget.quotationToEdit?.status ?? 'Borrador',
       notes: _notesController.text.trim(),
       termsConditions:
-          widget.quotationToEdit?.termsConditions ?? 'Validez 15 días.',
+          widget.quotationToEdit?.termsConditions ?? defaultTerms ?? '',
       createdAt: widget.quotationToEdit?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       items: updatedItems,
