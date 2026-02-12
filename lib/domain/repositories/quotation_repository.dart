@@ -20,4 +20,10 @@ abstract class QuotationRepository {
 
   /// Obtiene solo los ítems de una cotización específica.
   Future<List<QuotationItem>> getItemsByQuotationId(String quotationId);
+
+  /// Cuenta cuántas cotizaciones usan un producto específico.
+  Future<int> countQuotationsUsingProduct(String productId);
+
+  /// Cuenta cuántas cotizaciones tiene un cliente específico.
+  Future<int> countQuotationsByClient(String clientId);
 }

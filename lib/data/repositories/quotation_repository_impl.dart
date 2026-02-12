@@ -237,4 +237,24 @@ class QuotationRepositoryImpl implements QuotationRepository {
       await txn.delete(_quotationTable, where: 'id = ?', whereArgs: [id]);
     });
   }
+
+  @override
+  Future<int> countQuotationsUsingProduct(String productId) async {
+    final db = await _dbHelper.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(DISTINCT quotation_id) as count FROM $_itemsTable WHERE product_id = ?',
+      [productId],
+    );
+    return result.first['count'] as int;
+  }
+
+  @override
+  Future<int> countQuotationsByClient(String clientId) async {
+    final db = await _dbHelper.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM $_quotationTable WHERE client_id = ?',
+      [clientId],
+    );
+    return result.first['count'] as int;
+  }
 }
