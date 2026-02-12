@@ -4,9 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
 import '../../domain/entities/quotation.dart';
-import '../../domain/entities/quotation_item.dart';
-import '../../domain/usecases/quotation/create_quotation.dart';
-import '../../domain/usecases/quotation/get_quotations.dart';
 
 /// Gestor de estado (Controller) para las cotizaciones.
 /// El estado es AsyncValue<List<Quotation>>.
