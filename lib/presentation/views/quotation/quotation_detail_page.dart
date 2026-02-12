@@ -438,7 +438,7 @@ class _DetailContent extends ConsumerWidget {
         _sendWhatsApp(context);
         break;
       case 'email':
-        _sendEmail(context);
+        _sendEmail(context, ref);
         break;
       case 'status':
         _showChangeStatusSheet(context, ref);
@@ -531,31 +531,41 @@ class _DetailContent extends ConsumerWidget {
     }
   }
 
-  Future<void> _sendEmail(BuildContext context) async {
+  Future<void> _sendEmail(BuildContext context, WidgetRef ref) async {
     final currencyFormat = NumberFormat.currency(
       locale: 'es_CO',
       symbol: '\$',
       decimalDigits: 0,
     );
 
-    final email = quotation.clientEmail ?? '';
-    final subject = Uri.encodeComponent(
-      'Cotizacion #${quotation.quotationNumber}',
-    );
-    final body = Uri.encodeComponent(
-      'Estimado/a ${quotation.clientName},\n\n'
-      'Adjunto encontrara la cotizacion #${quotation.quotationNumber} '
-      'por un total de ${currencyFormat.format(quotation.total)}.\n\n'
-      'Quedo atento a sus comentarios.\n\nSaludos cordiales.',
-    );
+    try {
+      final pdfService = ref.read(pdfServiceProvider);
+      final configAsync = await ref.read(getCompanyConfigProvider.future);
 
-    final uri = Uri.parse('mailto:$email?subject=$subject&body=$body');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
+      final pdfBytes = await pdfService.generateQuotationPdf(
+        quotation: quotation,
+        config: configAsync,
+      );
+
+      final tempDir = await getTemporaryDirectory();
+      final file = File(
+          '${tempDir.path}/Cotizacion_${quotation.quotationNumber}.pdf');
+      await file.writeAsBytes(pdfBytes);
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'Cotizacion #${quotation.quotationNumber}',
+          text: 'Estimado/a ${quotation.clientName},\n\n'
+              'Adjunto encontrara la cotizacion #${quotation.quotationNumber} '
+              'por un total de ${currencyFormat.format(quotation.total)}.\n\n'
+              'Quedo atento a sus comentarios.\n\nSaludos cordiales.',
+        ),
+      );
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir el cliente de correo')),
+          SnackBar(content: Text('Error al enviar por email: $e')),
         );
       }
     }
